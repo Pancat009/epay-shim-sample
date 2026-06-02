@@ -156,7 +156,8 @@ app.all('/submit.php', async (req, res) => {
       const result = await wxUnifiedOrder(o);
       console.log('[submit] wxpay result return_code=%s result_code=%s err=%s', result.return_code, result.result_code, result.err_code_des || result.return_msg);
       if (result.return_code === 'SUCCESS' && result.result_code === 'SUCCESS') {
-        return res.redirect(`/wxpay/qrcode?url=${encodeURIComponent(result.code_url)}&order=${o.out_trade_no}`);
+        const qs = `url=${encodeURIComponent(result.code_url)}&order=${o.out_trade_no}&return_url=${encodeURIComponent(o.return_url || '/')}`;
+        return res.redirect(`/wxpay/qrcode?${qs}`);
       }
       const errMsg = result.err_code_des || result.return_msg || result.return_code || 'wxpay failed';
       return res.status(500).send(`微信支付失败: ${errMsg}`);
@@ -264,16 +265,37 @@ app.post('/wxpay/notify', (req, res) => {
   res.send('<xml><return_code><![CDATA[OK]]></return_code></xml>');
 });
 
-// 微信支付二维码展示页（简单 HTML）
+// 微信支付二维码展示页（带轮询，付款后自动跳转）
 app.get('/wxpay/qrcode', (req, res) => {
-  const { url, order } = req.query;
+  const { url, order, return_url } = req.query;
+  const safeReturn = return_url ? encodeURIComponent(return_url) : '';
   res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>微信扫码支付</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script></head>
-<body style="text-align:center;padding:40px;font-family:sans-serif">
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<style>body{text-align:center;padding:40px;font-family:sans-serif;background:#f5f5f5}
+.box{display:inline-block;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1)}
+h2{margin:0 0 16px;color:#333}#status{color:#888;margin-top:12px;font-size:14px}</style>
+</head><body>
+<div class="box">
 <h2>微信扫码支付</h2>
 <canvas id="qr"></canvas>
-<p>订单号：${order}</p>
-<script>QRCode.toCanvas(document.getElementById('qr'),'${url}',{width:256})</script>
+<p id="status">请使用微信扫描二维码完成支付</p>
+</div>
+<script>
+QRCode.toCanvas(document.getElementById('qr'),'${url}',{width:256});
+const order='${order}';
+const returnUrl='${safeReturn}' ? decodeURIComponent('${safeReturn}') : '';
+let timer=setInterval(async()=>{
+  try{
+    const r=await fetch('/api.php?act=order&out_trade_no='+order);
+    const d=await r.json();
+    if(d.status===1){
+      clearInterval(timer);
+      document.getElementById('status').textContent='✅ 支付成功！正在跳转...';
+      setTimeout(()=>{ location.href=returnUrl||'/'; },1500);
+    }
+  }catch(e){}
+},2000);
+</script>
 </body></html>`);
 });
 
