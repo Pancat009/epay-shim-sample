@@ -1,0 +1,14 @@
+services:
+  epay-shim:
+    build: .
+    container_name: epay-shim
+    restart: always
+    ports:
+      - "3750:3400"
+    env_file: .env
+    networks:
+      - new-api_new-api-network
+
+networks:
+  new-api_new-api-network:
+    external: true
