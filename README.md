@@ -1,89 +1,91 @@
-# EPay Shim for NewAPI（中文说明）
+English | [简体中文](README.zh-CN.md)
 
-这是一个为 NewAPI 提供的「易支付」协议适配层。NewAPI 按照易支付协议向本服务发起请求，本服务再分别调用支付宝官方 SDK 和微信支付 v2 官方接口完成真实下单，并把支付结果以易支付回调格式转发给 NewAPI。
+# EPay Shim for NewAPI
 
-## 当前支持
+This is an EPay-protocol adapter for NewAPI. NewAPI talks to this service using the EPay protocol; this service places real orders through the official Alipay SDK and the WeChat Pay v2 API, then forwards the payment result back to NewAPI in EPay's callback format.
 
-- ✅ 支付宝（PC 网页跳转 `submit.php`，扫码 `mapi.php`）
-- ✅ 微信支付 v2（NATIVE 扫码支付，`submit.php` 跳转到内置二维码页，`mapi.php` 返回二维码链接）
-- 订单数据保存在内存中，服务重启后会丢失（不影响已完成订单的对账，仅影响查单接口）
+## Current Support
 
-⚠️ 在配置好 HTTPS、正式域名和真实支付商户密钥之前，不要把本服务暴露在公网。
+- ✅ Alipay (PC redirect via `submit.php`, QR code via `mapi.php`)
+- ✅ WeChat Pay v2 (NATIVE QR payment; `submit.php` redirects to a built-in QR page, `mapi.php` returns the QR code URL)
+- Orders are stored in memory only and are lost on restart (does not affect already-completed orders, only the order-query API)
 
-## 环境变量配置
+⚠️ Do not expose this service publicly until you have configured HTTPS, a real domain, and valid payment merchant credentials.
 
-复制 `.env.example` 为 `.env` 并填写：
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in:
 
 ```env
 PORT=3000
-# 公网可访问地址，支付宝/微信回调要用，不要带末尾斜杠
+# Public URL of this service, used for Alipay/WeChat callbacks. No trailing slash.
 PUBLIC_BASE=https://your-domain.example.com
 
-# 易支付协议侧（NewAPI 那边填这两个）
+# EPay protocol side (NewAPI uses these two)
 EPAY_PID=1000
 EPAY_KEY=replace-with-a-long-random-secret
 
-# 支付宝当面付（开放平台 -> 应用 -> 密钥）
+# Alipay Face-to-Face Payment (Open Platform -> App -> Keys)
 ALIPAY_APP_ID=
 ALIPAY_PRIVATE_KEY=
 ALIPAY_PUBLIC_KEY=
 
-# 微信支付 v2（商户平台 -> 账户中心 -> API安全）
+# WeChat Pay v2 (Merchant Platform -> Account Center -> API Security)
 WX_APP_ID=
 WX_MCH_ID=
 WX_API_KEY=
 ```
 
-字段说明：
+Field descriptions:
 
-- `PORT`：服务监听端口。
-- `PUBLIC_BASE`：本服务的公网访问地址，用于生成支付宝/微信的异步通知地址，**末尾不要带 `/`**。
-- `EPAY_PID` / `EPAY_KEY`：易支付商户号 / 商户密钥，NewAPI 支付设置中要填同样的值。
-- `ALIPAY_APP_ID` / `ALIPAY_PRIVATE_KEY` / `ALIPAY_PUBLIC_KEY`：支付宝开放平台应用的 AppID、应用私钥、支付宝公钥。
-- `WX_APP_ID`：微信支付绑定的公众号/应用 AppID。
-- `WX_MCH_ID`：微信支付商户号。
-- `WX_API_KEY`：微信支付商户平台 -> 账户中心 -> API安全 中设置的 APIv2 密钥（32 位字符串，**不是**公钥 `PUB_KEY_ID_xxx`）。
+- `PORT`: Port the service listens on.
+- `PUBLIC_BASE`: Public URL of this service, used to build Alipay/WeChat async notify URLs. **No trailing `/`**.
+- `EPAY_PID` / `EPAY_KEY`: EPay merchant ID / merchant key. Use the same values in NewAPI's payment settings.
+- `ALIPAY_APP_ID` / `ALIPAY_PRIVATE_KEY` / `ALIPAY_PUBLIC_KEY`: AppID, application private key, and Alipay public key from your Alipay Open Platform app.
+- `WX_APP_ID`: The Official Account/App AppID bound to your WeChat Pay merchant account.
+- `WX_MCH_ID`: WeChat Pay merchant ID.
+- `WX_API_KEY`: The APIv2 key set under Merchant Platform -> Account Center -> API Security (a 32-character string, **not** the APIv3 public key `PUB_KEY_ID_xxx`).
 
-## 本地运行
+## Run Locally
 
 ```bash
 npm install
 npm start
 ```
 
-健康检查：
+Health check:
 
 ```text
 GET /
 ```
 
-返回：
+Returns:
 
 ```text
 epay shim ok
 ```
 
-## Docker 运行
+## Run with Docker
 
-项目自带 `Dockerfile` 和 `docker-compose.yml`，默认会加入和 NewAPI 相同的 Docker 网络，方便容器间互相访问。
+The project ships with a `Dockerfile` and `docker-compose.yml`. By default it joins the same Docker network as NewAPI so the containers can reach each other.
 
 ```bash
 docker compose up -d --build
 ```
 
-如果和 NewAPI 不在同一个 compose 项目中，请根据实际情况修改 `docker-compose.yml` 里的外部网络名称（用 `docker network ls` 查看）。
+If this service is not part of the same compose project as NewAPI, update the external network name in `docker-compose.yml` accordingly (use `docker network ls` to check).
 
-## NewAPI 配置
+## NewAPI Configuration
 
-在 NewAPI 后台 -> 系统设置 -> 支付设置中开启「易支付」，填写：
+In the NewAPI admin console, go to System Settings -> Payment Settings, enable "EPay" and fill in:
 
 ```text
-易支付地址：https://your-domain.example.com   （即 PUBLIC_BASE）
-商户 ID：和 EPAY_PID 保持一致
-商户密钥：和 EPAY_KEY 保持一致
+API address: https://your-domain.example.com   (i.e. PUBLIC_BASE)
+Merchant ID (PID): same as EPAY_PID
+Merchant key (KEY): same as EPAY_KEY
 ```
 
-支付方式列表（同时支持支付宝和微信）：
+Payment methods list (supports both Alipay and WeChat Pay):
 
 ```json
 [
@@ -100,32 +102,32 @@ docker compose up -d --build
 ]
 ```
 
-NewAPI 生成订单后会提交到：
+NewAPI will create an order and submit it to:
 
 ```text
 https://your-domain.example.com/submit.php
 ```
 
-或调用扫码接口：
+or call the QR code API:
 
 ```text
 https://your-domain.example.com/mapi.php
 ```
 
-## 支付流程说明
+## Payment Flow
 
-- **支付宝**：`submit.php` 直接跳转到支付宝收银台页面；`mapi.php` 调用 `alipay.trade.precreate` 返回二维码链接。
-- **微信支付**：`submit.php` 调用微信统一下单接口（`trade_type=NATIVE`），成功后跳转到本服务内置的二维码展示页 `/wxpay/qrcode`；该页面会每 2 秒轮询一次订单状态，支付成功后自动跳转回 `return_url`。`mapi.php` 同样调用统一下单并直接返回二维码链接。
+- **Alipay**: `submit.php` redirects directly to the Alipay cashier page; `mapi.php` calls `alipay.trade.precreate` and returns a QR code URL.
+- **WeChat Pay**: `submit.php` calls WeChat's unified order API (`trade_type=NATIVE`) and, on success, redirects to the built-in QR code page `/wxpay/qrcode`. That page polls the order status every 2 seconds and automatically redirects to `return_url` once payment succeeds. `mapi.php` also calls the unified order API and returns the QR code URL directly.
 
-## 异步通知
+## Async Notifications
 
-- 支付宝：`POST /alipay/notify`，验签通过且交易状态为 `TRADE_SUCCESS`/`TRADE_FINISHED` 时，标记订单成功并转发给 NewAPI 的 `notify_url`。
-- 微信支付：`POST /wxpay/notify`，验签通过且 `result_code=SUCCESS` 时，标记订单成功并转发给 NewAPI 的 `notify_url`。
+- Alipay: `POST /alipay/notify` — once the signature is verified and the trade status is `TRADE_SUCCESS`/`TRADE_FINISHED`, the order is marked as paid and forwarded to NewAPI's `notify_url`.
+- WeChat Pay: `POST /wxpay/notify` — once the signature is verified and `result_code=SUCCESS`, the order is marked as paid and forwarded to NewAPI's `notify_url`.
 
-转发到 NewAPI 失败时会自动重试，最多 5 次，每次间隔递增（30s、60s、90s...）。
+If forwarding to NewAPI fails, it is retried automatically up to 5 times with increasing intervals (30s, 60s, 90s, ...).
 
-## 常见问题
+## Troubleshooting
 
-- **微信报错 "ISV权限不足"**：检查微信支付商户号是否已经完成 `Native支付` 产品的签约，以及 `WX_APP_ID` 是否和商户号正确绑定。
-- **微信支付失败: undefined**：通常是 `WX_API_KEY` 配置错误（必须是 APIv2 密钥，不是 APIv3 的 `PUB_KEY_ID_xxx`），或网络无法访问 `api.mch.weixin.qq.com`。
-- **混合内容警告（Mixed Content）**：如果 NewAPI 是 HTTPS，但本服务是 HTTP，浏览器跳转/表单提交时会被拦截，请给本服务也配置 HTTPS（推荐 nginx + certbot）。
+- **WeChat error "ISV权限不足" (insufficient ISV permissions)**: Check whether the WeChat Pay merchant account has signed up for the "Native Payment" product, and that `WX_APP_ID` is correctly bound to the merchant ID.
+- **"微信支付失败: undefined"**: Usually caused by a wrong `WX_API_KEY` (must be the APIv2 key, not the APIv3 `PUB_KEY_ID_xxx` public key), or the server cannot reach `api.mch.weixin.qq.com`.
+- **Mixed Content warning**: If NewAPI is served over HTTPS but this service is HTTP, browser redirects/form submissions may be blocked. Configure HTTPS for this service too (nginx + certbot is recommended).
